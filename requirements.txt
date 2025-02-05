@@ -1,0 +1,2 @@
+DataHub @ git+https://github.com/Snackman8/DataHub.git@v2.0
+pandas

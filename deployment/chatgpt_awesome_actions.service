@@ -1,0 +1,15 @@
+[Unit]
+Description=Provide ChatGTP Awesome Actions API Handler
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+TimeoutStopSec=15
+
+Type=simple
+Restart=on-failure
+KillSignal=SIGINT
+ExecStart=/usr/local/pipx/venvs/chatgpt-awesome-actions/bin/datahub_server --port 8100 --disable_auth --module_path /usr/local/pipx/venvs/chatgpt-awesome-actions/lib/python3.10/site-packages/chatgpt_awesome_actions_datamodules
+StandardOutput=append:/var/log/chatgpt_awesome_actions_service.log
+StandardError=append:/var/log/chatgpt_awesome_actions_service.log
