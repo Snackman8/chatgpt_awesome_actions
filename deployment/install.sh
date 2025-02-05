@@ -2,8 +2,6 @@
 
 # made for RHEL 9
 
-export PATH="/usr/local/bin:$PATH"
-
 SERVICE_NAME="chatgpt_awesome_actions.service"
 APACHE_CONF="apache_chatgpt_awesome_actions.conf"
 PIPX_HOME_DIR="/usr/local/pipx"
@@ -23,7 +21,7 @@ if [[ "$1" == "--uninstall" ]]; then
     sudo systemctl daemon-reload
     
     echo "Uninstalling the app using pipx..."
-    sudo PIPX_HOME=$PIPX_HOME_DIR PIPX_BIN_DIR=$PIPX_BIN_DIR pipx uninstall chatgpt_awesome_actions
+    sudo PIPX_HOME=$PIPX_HOME_DIR PIPX_BIN_DIR=$PIPX_BIN_DIR /usr/local/bin/pipx uninstall chatgpt_awesome_actions
     
     echo "Removing Apache proxy configuration..."
     sudo rm -f $APACHE_CONF_PATH
@@ -39,7 +37,7 @@ echo "Installing chatgpt_awesome_actions..."
 
 # Install the app
 echo "Installing the application using pipx..."
-sudo PIPX_HOME=$PIPX_HOME_DIR PIPX_BIN_DIR=$PIPX_BIN_DIR pipx install .. --include-deps
+sudo PIPX_HOME=$PIPX_HOME_DIR PIPX_BIN_DIR=$PIPX_BIN_DIR /usr/local/bin/pipx install .. --include-deps
 
 echo "Copying systemd service file..."
 sudo cp $SERVICE_NAME /etc/systemd/system/
