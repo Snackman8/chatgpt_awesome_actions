@@ -10,6 +10,8 @@ TimeoutStopSec=15
 Type=simple
 Restart=on-failure
 KillSignal=SIGINT
-ExecStart=/usr/local/pipx/venvs/chatgpt-awesome-actions/bin/datahub_server --port 8100 --disable_auth --module_path /usr/local/pipx/venvs/chatgpt-awesome-actions/lib/python3.10/site-packages/chatgpt_awesome_actions_datamodules
+ExecStartPre=/bin/sh -c 'rm -rf /run/chatgpt_awesome_actions.env && PYTHON_VERSION=$(ls /usr/local/pipx/venvs/chatgpt-awesome-actions/lib/ | grep -E "python3.[0-9]+" | sort -V | tail -n 1); echo "MODULE_PATH=/usr/local/pipx/venvs/chatgpt-awesome-actions/lib/$${PYTHON_VERSION}/site-packages/chatgpt_awesome_actions_datamodules" > /run/chatgpt_awesome_actions.env; sync'
+ExecStart=/bin/sh -c '. /run/chatgpt_awesome_actions.env && exec /usr/local/pipx/venvs/chatgpt-awesome-actions/bin/datahub_server --port 8100 --disable_auth --module_path "$MODULE_PATH"'
+
 StandardOutput=append:/var/log/chatgpt_awesome_actions_service.log
 StandardError=append:/var/log/chatgpt_awesome_actions_service.log

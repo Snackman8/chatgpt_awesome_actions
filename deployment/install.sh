@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# made for RHEL 9
+
+export PATH="/usr/local/bin:$PATH"
+
 SERVICE_NAME="chatgpt_awesome_actions.service"
 APACHE_CONF="apache_chatgpt_awesome_actions.conf"
 PIPX_HOME_DIR="/usr/local/pipx"
@@ -25,7 +29,7 @@ if [[ "$1" == "--uninstall" ]]; then
     sudo rm -f $APACHE_CONF_PATH
     
     echo "Restarting Apache service..."
-    sudo systemctl restart apache2
+    sudo systemctl restart httpd
     
     echo "Uninstallation complete."
     exit 0
@@ -51,9 +55,9 @@ sudo systemctl enable $SERVICE_NAME
 sudo systemctl restart $SERVICE_NAME
 
 echo "Copying Apache proxy configuration..."
-sudo cp $APACHE_CONF /etc/httpd/conf.d/
+sudo cp $APACHE_CONF $APACHE_CONF_PATH
 
 echo "Restarting Apache service..."
-sudo systemctl restart apache2
+sudo systemctl restart httpd
 
 echo "Installation complete."

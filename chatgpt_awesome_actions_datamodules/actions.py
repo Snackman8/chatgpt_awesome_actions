@@ -26,8 +26,7 @@ if os.path.isfile(CONFIG_FILE):
 # --------------------------------------------------
 #    CACHED CONFIG VARS
 # --------------------------------------------------
-#DB_PATH = CONFIG.get('LocalDB', 'db_path')
-DB_PATH = CONFIG.get('LocalDB', 'db_path', fallback=None)
+DB_PATH = '' if CONFIG is None else CONFIG.get('LocalDB', 'db_path', fallback='')
 
 
 # --------------------------------------------------
