@@ -2,15 +2,13 @@
 #    Imports
 # --------------------------------------------------
 import configparser
-import json
+import importlib
+import inspect
+import logging
 import os
-import pickle
 import shutil
-import sqlite3
-import sys
 import traceback
 import uuid
-import pandas as pd
 
 
 # --------------------------------------------------
@@ -27,6 +25,12 @@ DEFAULT_SAVE_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__))
 [FileGeneration]
 save_file_path = /usr/local/generated_files
 url_prefix = https://www.example.com/generated_files
+
+[ModuleInjection]
+module_list = testmod.xx
+
+[Logging]
+log_level = INFO
 """
 
 CONFIG_FILE = '/etc/chatgpt_awesome_actions_datamodule.conf'
@@ -39,8 +43,35 @@ if os.path.isfile(CONFIG_FILE):
 # --------------------------------------------------
 #    Cached Config Vars
 # --------------------------------------------------
+LOG_LEVEL  = 'INFO' if CONFIG is None else CONFIG.get('Logging', 'log_level', fallback='INFO')
+MODULE_LIST_STR = '' if CONFIG is None else CONFIG.get('ModuleInjection', 'module_list', fallback='')
 SAVE_FILE_DIR = DEFAULT_SAVE_FILE_PATH if CONFIG is None else CONFIG.get('FileGeneration', 'save_file_path', fallback=DEFAULT_SAVE_FILE_PATH)
 URL_PREFIX = 'http://localhost' if CONFIG is None else CONFIG.get('FileGeneration', 'url_prefix', fallback='http://localhost')
+
+
+# --------------------------------------------------
+#    Logging
+# --------------------------------------------------
+logging.basicConfig(level=LOG_LEVEL)
+
+
+# --------------------------------------------------
+#    Load functions from modules
+# --------------------------------------------------
+INJECTED_GLOBALS = {}
+for m in MODULE_LIST_STR.split(','):
+    try:
+        module = importlib.import_module(m)
+        logging.info(f'{m} was succesfully imported')
+
+        for name in dir(module):
+            if not name.startswith("_"):  # Skip private and built-in attributes
+                attr = getattr(module, name)
+                if inspect.isfunction(attr):  # Ensure it's a function
+                    logging.info(f'    Injecting function {name} into globals')
+                    INJECTED_GLOBALS[name] = attr
+    except:
+        logging.exception(f'Error trying to import {m}')
 
 
 # --------------------------------------------------
@@ -61,64 +92,6 @@ def echo(msg: str) -> dict:
     return {'body': msg, 'content-type': 'text/plain'}
 
 
-
-# def _execute_servicenow_sql(sql):
-#     """
-# Run SQL on service now data.  Results are returned as dataframe
-#
-# Table: incidents
-# Columns: number, opened_at, resolved_at, category, subcategory, state, impact, urgency, priority, close_code, short_description, location, assigned_to
-#
-# Params:
-#     sql - (str) SQL query to run on the filtered data.
-#     """
-#     with sqlite3.connect(DB_PATH) as conn:
-#         return pd.read_sql_query(sql, conn)
-
-
-# def _exec_python_code(code, filename=None):
-#     """
-# Executes the provided Python code, returns value, and optionally saves binary data to a file.  Set __retval__ inside the code for returned data.
-#
-# Returns a dict with 'body' (If filename is given, returns a URL to the returned data, otherwise returns the returned data.
-#
-# Params:
-#     code - (str) The Python code to execute. The code should define `__retval__` as the result.
-#     filename - (str, optional) Name of the file to save the data. A unique prefix will be added.
-#     """
-#     print(f'Filename: {filename}')
-#     print(code)
-#
-#     # execute_servicenow_sql function takes a single parameter sql, executes the sql, and returns back a dataframe
-#     globals_dict = {"execute_servicenow_sql": _execute_servicenow_sql}
-#
-#     local_vars = {}
-#     try:
-#         exec(code, globals_dict)
-#         data = globals_dict['__retval__']
-#         if filename:
-#             filename = f"{uuid.uuid4().hex}_{filename}"
-#
-#             with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), f'_static/files/{filename}'), 'wb') as f:
-#                 try:
-#                     f.write(data)
-#                 except:
-#                     f.write(json.dumps(data).encode('utf-8'))
-#
-#             url = f'https://testapi.projectredline.com/gpt_action_servicenow/files/{filename}'
-#
-#             return {'body': url, 'content-type': 'text/uri-list'}
-#         else:
-#             try:
-#                 return {'body': data, 'content-type': 'text/plain'}
-#             except:
-#                 return {'body': f.write(json.dumps(data).encode('utf-8')), 'content-type': 'text/plain'}
-#
-#     except Exception as e:
-#         print(traceback.format_exc())
-#         return {'body': traceback.format_exc(), 'content-type': 'text/error'}
-
-
 def _exec_python_code(code: str) -> dict:
     """
     Executes the provided Python code and returns the result.
@@ -133,7 +106,7 @@ def _exec_python_code(code: str) -> dict:
     """
     print(code)
 
-    globals_dict = {}
+    globals_dict = INJECTED_GLOBALS.copy()
 
     # local_vars = {}
     try:
@@ -204,9 +177,5 @@ def exec_python_code_return_URL(code: str) -> dict:
     shutil.copy(src_filepath, dst_filepath)
 
     url = os.path.join(URL_PREFIX, dst_filename)
-    print(url)
+    print(f'\bGenerated URL: {url}')
     return {'body': url, 'content-type': 'text/uri-list'}
-
-
-
-
