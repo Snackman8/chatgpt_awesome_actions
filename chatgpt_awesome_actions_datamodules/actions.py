@@ -14,9 +14,22 @@ import pandas as pd
 
 
 # --------------------------------------------------
-#    CONFIG FILE
+#    Globals
 # --------------------------------------------------
-CONFIG_FILE = '/etc/datamodule_gpt_action_servicenow.conf'
+DEFAULT_SAVE_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), f'_static/files/')
+
+
+# --------------------------------------------------
+#    Config File
+# --------------------------------------------------
+"""
+# Example conf file
+[FileGeneration]
+save_file_path = /usr/local/generated_files
+url_prefix = https://www.example.com/generated_files
+"""
+
+CONFIG_FILE = '/etc/chatgpt_awesome_actions_datamodule.conf'
 CONFIG = None
 if os.path.isfile(CONFIG_FILE):
     CONFIG = configparser.ConfigParser()
@@ -24,9 +37,10 @@ if os.path.isfile(CONFIG_FILE):
 
 
 # --------------------------------------------------
-#    CACHED CONFIG VARS
+#    Cached Config Vars
 # --------------------------------------------------
-DB_PATH = '' if CONFIG is None else CONFIG.get('LocalDB', 'db_path', fallback='')
+SAVE_FILE_DIR = DEFAULT_SAVE_FILE_PATH if CONFIG is None else CONFIG.get('FileGeneration', 'save_file_path', fallback=DEFAULT_SAVE_FILE_PATH)
+URL_PREFIX = 'http://localhost' if CONFIG is None else CONFIG.get('FileGeneration', 'url_prefix', fallback='http://localhost')
 
 
 # --------------------------------------------------
@@ -48,18 +62,18 @@ def echo(msg: str) -> dict:
 
 
 
-def _execute_servicenow_sql(sql):
-    """
-Run SQL on service now data.  Results are returned as dataframe
-
-Table: incidents
-Columns: number, opened_at, resolved_at, category, subcategory, state, impact, urgency, priority, close_code, short_description, location, assigned_to
-
-Params:
-    sql - (str) SQL query to run on the filtered data.
-    """
-    with sqlite3.connect(DB_PATH) as conn:
-        return pd.read_sql_query(sql, conn)
+# def _execute_servicenow_sql(sql):
+#     """
+# Run SQL on service now data.  Results are returned as dataframe
+#
+# Table: incidents
+# Columns: number, opened_at, resolved_at, category, subcategory, state, impact, urgency, priority, close_code, short_description, location, assigned_to
+#
+# Params:
+#     sql - (str) SQL query to run on the filtered data.
+#     """
+#     with sqlite3.connect(DB_PATH) as conn:
+#         return pd.read_sql_query(sql, conn)
 
 
 # def _exec_python_code(code, filename=None):
@@ -186,10 +200,10 @@ def exec_python_code_return_URL(code: str) -> dict:
 
     src_filename = os.path.basename(src_filepath)
     dst_filename = f"{uuid.uuid4().hex}_{src_filename}"
-    dst_filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), f'_static/files/{dst_filename}')
+    dst_filepath = os.path.join(SAVE_FILE_DIR, dst_filename)
     shutil.copy(src_filepath, dst_filepath)
 
-    url = f'https://testapi.projectredline.com/gpt_action_servicenow/files/{dst_filename}'
+    url = os.path.join(URL_PREFIX, dst_filename)
     print(url)
     return {'body': url, 'content-type': 'text/uri-list'}
 

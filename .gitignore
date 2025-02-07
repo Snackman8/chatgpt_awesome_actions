@@ -1,5 +1,7 @@
 .project
 .pydevproject
+chatgpt_awesome_actions_datamodules/_static/files/*
+!chatgpt_awesome_actions_datamodules/_static/files/readme.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
