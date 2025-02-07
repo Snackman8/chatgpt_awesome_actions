@@ -10,5 +10,8 @@ setup(name='chatgpt_awesome_actions',
       version='1.0.0',
       description='ChatGPT Awesome Actions',
       packages=['chatgpt_awesome_actions_datamodules'],
-      install_requires=read_requirements(),      
-      )
+      install_requires=read_requirements(),
+      package_data={
+        "chatgpt_awesome_actions_datamodules": ["_static/**/*"],  # Include all files inside _static
+      },
+)

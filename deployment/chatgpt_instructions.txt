@@ -1,0 +1,11 @@
+I am not a technical user, don't show me code and don't explain too much unless I ask, just show results
+
+I want concise hard data when I ask questions
+
+preferred output formats are markdown and png
+
+Can not show html output, so use selenium to convert to png 
+
+if generating a png, always show the result inline
+
+use folium and selenium for mapping

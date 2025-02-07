@@ -1,0 +1,99 @@
+info:
+  description: API with dynamic function handlers
+  title: Dynamic API
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /actions/echo:
+    post:
+      description: Echoes back a message as a test.
+      operationId: actions__echo
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                msg:
+                  description: The message to be returned.
+                  type: string
+              type: object
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: 'A dictionary containing the response with:'
+                properties:
+                  body:
+                    description: The echoed message.
+                    type: string
+                  content-type:
+                    description: The MIME type of the response.
+                    type: string
+                type: object
+          description: Successful Response
+  /actions/exec_python_code_return_URL:
+    post:
+      description: Executes Python code that generates a file in the `/tmp/` directory
+        and returns a secure, obfuscated URL to access it.
+      operationId: actions__exec_python_code_return_URL
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                code:
+                  description: The Python code to execute. The code must define the
+                    absolute file path in the
+                  type: string
+              type: object
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: 'A dictionary containing the response with:'
+                properties:
+                  body:
+                    description: A secure, opaque URL pointing to the file's contents.
+                      The file is not
+                    type: string
+                  content-type:
+                    description: The MIME type of the response, set to 'text/uri-list'
+                      for success.
+                    type: string
+                type: object
+          description: Successful Response
+  /actions/exec_python_code_return_string:
+    post:
+      description: Executes the provided Python code and returns the result as a string.
+      operationId: actions__exec_python_code_return_string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                code:
+                  description: The Python code to execute. The code must assign a
+                    value to `__retval__`
+                  type: string
+              type: object
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: 'A dictionary containing the response with:'
+                properties:
+                  body:
+                    description: The result of the executed code, extracted from `__retval__`.
+                    type: string
+                  content-type:
+                    description: The MIME type of the response, either 'text/plain'
+                      for success
+                    type: string
+                type: object
+          description: Successful Response
+servers:
+- url: https://localhost/chatgpt_awesome_actions/
+
