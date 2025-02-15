@@ -147,15 +147,20 @@ def _convert_public_to_save_path(public_url: str) -> str:
     return file_path
 
 
-def _convert_tmp_to_public(src_filepath: str) -> dict:
+def _convert_tmp_to_save_path(src_filepath: str) -> dict:
     """
-    Converts a file path inside /tmp/ to a publicly accessible URL.
+    Converts a file path inside /tmp/ to a publicly accessible file path.
 
     Parameters:
-        src_filepath (str): The absolute path inside /tmp/
+        src_filepath (str): The absolute path of the file inside the /tmp/ directory.
 
     Returns:
-        dict: A dictionary containing the public URL and content type
+        tuple: A tuple containing:
+            - dst_filepath (str): The new file path in the save directory.
+            - dst_filename (str): The new filename with a unique identifier.
+
+    Raises:
+        Exception: If the file is not inside /tmp/ or does not exist.
     """
     # Ensure the path is inside /tmp/
     src_filepath = os.path.abspath(src_filepath)
@@ -171,14 +176,8 @@ def _convert_tmp_to_public(src_filepath: str) -> dict:
     dst_filename = f"{uuid.uuid4().hex}_{src_filename}"
     dst_filepath = os.path.join(SAVE_FILE_DIR, dst_filename)
 
-    # Copy file or directory
-    if os.path.isfile(src_filepath):
-        shutil.copy(src_filepath, dst_filepath)
-    else:
-        shutil.copytree(src_filepath, dst_filepath)
-
     # Construct the public URL
-    return os.path.join(URL_PREFIX, dst_filename), dst_filename
+    return dst_filepath, dst_filename
 
 
 def _find_free_port(start=9000, end=10000):
@@ -295,6 +294,7 @@ def exec_python_code_return_URL(code: str) -> dict:
     src_filepath = retval['body']
 
     dst_filepath, dst_filename = _convert_tmp_to_public(src_filepath)
+    logging.info(f'Copying {src_filepath} to {dst_filepath}.  filename={dst_filename}')
     #
     #
     # src_filepath = os.path.abspath(src_filepath)

@@ -11,7 +11,7 @@ Type=simple
 Restart=on-failure
 KillSignal=SIGINT
 ExecStartPre=/bin/sh -c 'rm -rf /run/chatgpt_awesome_actions.env && PYTHON_VERSION=$(ls /usr/local/pipx/venvs/chatgpt-awesome-actions/lib/ | grep -E "python3.[0-9]+" | sort -V | tail -n 1); echo "MODULE_PATH=/usr/local/pipx/venvs/chatgpt-awesome-actions/lib/$${PYTHON_VERSION}/site-packages/chatgpt_awesome_actions_datamodules" > /run/chatgpt_awesome_actions.env; sync'
-ExecStart=/bin/sh -c '. /run/chatgpt_awesome_actions.env && exec /usr/local/pipx/venvs/chatgpt-awesome-actions/bin/datahub_server --port 8100 --module_path "$MODULE_PATH" --db_path /usr/local/pipx/venvs/chatgpt-awesome-actions/keys.db' 
+ExecStart=/bin/sh -c '. /run/chatgpt_awesome_actions.env && exec /usr/local/pipx/venvs/chatgpt-awesome-actions/bin/datahub_server --port 8100 --module_path "$MODULE_PATH" --db_path /usr/local/pipx/venvs/chatgpt-awesome-actions/keys.db --disable_auth_on_static_files' 
 
 StandardOutput=append:/var/log/chatgpt_awesome_actions_service.log
 StandardError=append:/var/log/chatgpt_awesome_actions_service.log
