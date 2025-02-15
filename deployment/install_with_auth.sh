@@ -51,7 +51,7 @@ echo "Setting correct permissions for the service file..."
 sudo chmod 644 /etc/systemd/system/$SERVICE_NAME
 
 echo "Copying keys.db..."
-[ -f keys.db ] && cp keys.db /usr/local/pipx/venvs/chatgpt-awesome-actions/keys.db
+cp keys.db /usr/local/pipx/venvs/chatgpt-awesome-actions/keys.db
 
 echo "Reloading systemd daemon..."
 sudo systemctl daemon-reload

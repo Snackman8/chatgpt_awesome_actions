@@ -293,7 +293,7 @@ def exec_python_code_return_URL(code: str) -> dict:
 
     src_filepath = retval['body']
 
-    dst_filepath, dst_filename = _convert_tmp_to_public(src_filepath)
+    dst_filepath, dst_filename = _convert_tmp_to_save_path(src_filepath)
     logging.info(f'Copying {src_filepath} to {dst_filepath}.  filename={dst_filename}')
     #
     #
