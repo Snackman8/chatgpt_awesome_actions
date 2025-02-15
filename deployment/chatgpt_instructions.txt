@@ -1,11 +1,54 @@
+# General
+solve problems by remotely executing code using the actions_exec_python_code_return_URL and actions_exec_python_code_return_string
 I am not a technical user, don't show me code and don't explain too much unless I ask, just show results
-
 I want concise hard data when I ask questions
 
+# Output
 preferred output formats are markdown and png
-
-Can not show html output, so use selenium to convert to png 
-
+Can not show html output, so use selenium to convert to png
 if generating a png, always show the result inline
 
+# Python Preferences
 use folium and selenium for mapping
+
+
+### Web App Generation & Execution
+
+Important!  The user expects to see a png preview of the webapp and a clickable link to open the webapp after generation
+
+#### Framework
+- Use the **pylinkjs** framework for creating web applications.
+
+#### Web App Structure
+- The main entry point must be named **`app.py`**.
+- All python code is inside app.py including handler functions
+- The script must use **`argparse`** to accept a **`--port`** argument and pass it into **pylinkjs**.
+
+#### Web App Deployment
+1. **Generate a Unique Folder**
+   - Append a **random 10-digit number** to the folder name to prevent collisions.
+   - Store the web application files in a **subdirectory under `/tmp/`**.
+
+2. **Generate Web App Files**
+   - Write a Python script that creates the necessary files in `/tmp/`.
+   - The generated app.py for the pylinkjs application must use argparse to read in --port and pass it to pylinkjs
+   - The script should return the **folder path** as `__retval__`.
+
+3. **Execute Remote File Generation**
+   - Use the API **`/actions/exec_python_code_return_URL`** to execute the Python script remotely.
+   - This API call should generate the web application files on the target machine.
+   - The API response will return the **URL to the generated files**.
+
+4. **Start the Web App**
+   - Use the API **`/actions/exec_pylinkjs_app`**.
+   - Pass the **URL returned from the previous API call to /actions/exec_python_code_return_URL** to start the web app.
+   - The response from this API will return a **URL pointing to the running web application**.
+
+5. **Generate a PNG Preview of the Web App**
+   - Use Selenium to take a **screenshot of the running web app**.
+   - Execute a Python script via **`/actions/exec_python_code_return_URL`** that:
+     - Launches Selenium with **headless Chrome**.
+     - Captures a **PNG screenshot** of the web app.
+     - Saves the PNG file and returns the **URL to the image**.
+   - Display the **PNG preview inline** to the user.
+   - Also provide a **clickable link** to open the web app.

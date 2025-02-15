@@ -3,3 +3,7 @@ pandas
 matplotlib
 folium
 selenium
+tabulate
+bokeh
+psutil
+pylinkjs @ git+https://github.com/Snackman8/pyLinkJS.git

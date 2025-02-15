@@ -32,6 +32,38 @@ paths:
                     type: string
                 type: object
           description: Successful Response
+  /actions/exec_pylinkjs_app:
+    post:
+      description: Launches a pylinkjs application from the specified URL in an isolated
+        environment and returns a secure, dynamically assigned URL to access it.
+      operationId: actions__exec_pylinkjs_app
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                url:
+                  description: The external URL pointing to the pylinkjs application
+                    source code. The function
+                  type: string
+              type: object
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: 'A dictionary containing the response with:'
+                properties:
+                  body:
+                    description: A unique URL where the pylinkjs application can be
+                      accessed.
+                    type: string
+                  content-type:
+                    description: The MIME type of the response, set to 'text/uri-list'
+                      for success.
+                    type: string
+                type: object
+          description: Successful Response
   /actions/exec_python_code_return_URL:
     post:
       description: Executes Python code that generates a file in the `/tmp/` directory
@@ -95,5 +127,4 @@ paths:
                 type: object
           description: Successful Response
 servers:
-- url: https://localhost/chatgpt_awesome_actions/
-
+- url: http://localhost/chatgpt_awesome_actions/

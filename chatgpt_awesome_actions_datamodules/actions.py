@@ -6,7 +6,12 @@ import importlib
 import inspect
 import logging
 import os
+import psutil
 import shutil
+import signal
+import socket
+import subprocess
+import sys
 import traceback
 import uuid
 
@@ -25,6 +30,9 @@ DEFAULT_SAVE_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__))
 [FileGeneration]
 save_file_path = /usr/local/generated_files
 url_prefix = https://www.example.com/generated_files
+
+[WebApps]
+url_prefix = http://localhost
 
 [ModuleInjection]
 module_list = testmod.xx
@@ -47,6 +55,7 @@ LOG_LEVEL  = 'INFO' if CONFIG is None else CONFIG.get('Logging', 'log_level', fa
 MODULE_LIST_STR = '' if CONFIG is None else CONFIG.get('ModuleInjection', 'module_list', fallback='')
 SAVE_FILE_DIR = DEFAULT_SAVE_FILE_PATH if CONFIG is None else CONFIG.get('FileGeneration', 'save_file_path', fallback=DEFAULT_SAVE_FILE_PATH)
 URL_PREFIX = 'http://localhost' if CONFIG is None else CONFIG.get('FileGeneration', 'url_prefix', fallback='http://localhost')
+WEBAPP_URL_PREFIX = 'http://localhost' if CONFIG is None else CONFIG.get('WebApps', 'url_prefix', fallback='http://localhost')
 
 
 # --------------------------------------------------
@@ -59,24 +68,125 @@ logging.basicConfig(level=LOG_LEVEL)
 #    Load functions from modules
 # --------------------------------------------------
 INJECTED_GLOBALS = {}
-for m in MODULE_LIST_STR.split(','):
-    try:
-        module = importlib.import_module(m)
-        logging.info(f'{m} was succesfully imported')
+if MODULE_LIST_STR.strip() != '':
+    for m in MODULE_LIST_STR.strip().split(','):
+        try:
+            module = importlib.import_module(m)
+            logging.info(f'{m} was succesfully imported')
 
-        for name in dir(module):
-            if not name.startswith("_"):  # Skip private and built-in attributes
-                attr = getattr(module, name)
-                if inspect.isfunction(attr):  # Ensure it's a function
-                    logging.info(f'    Injecting function {name} into globals')
-                    INJECTED_GLOBALS[name] = attr
-    except:
-        logging.exception(f'Error trying to import {m}')
+            for name in dir(module):
+                if not name.startswith("_"):  # Skip private and built-in attributes
+                    attr = getattr(module, name)
+                    if inspect.isfunction(attr):  # Ensure it's a function
+                        logging.info(f'    Injecting function {name} into globals')
+                        INJECTED_GLOBALS[name] = attr
+        except:
+            logging.exception(f'Error trying to import {m}')
 
 
 # --------------------------------------------------
 #    Functions
 # --------------------------------------------------
+def _cleanup_old_webapps():
+    # Look for processes containing "/app.py" and "--port"
+    logging.info(f"Cleaning up old webapps")
+    matching_processes = []
+    for process in psutil.process_iter(attrs=["pid", "name", "cmdline"]):
+        try:
+            cmdline = process.info["cmdline"]
+            if (
+                cmdline and
+                any("/app.py" in arg for arg in cmdline) and
+                any("--port" in arg for arg in cmdline) and
+                cmdline[0] == sys.executable
+            ):
+                matching_processes.append(process.info)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass  # Process no longer exists or permission denied
+
+    # Kill matching processes
+    for proc in matching_processes:
+        try:
+            pid = proc["pid"]
+            logging.info(f"Killing PID {pid}: {' '.join(proc['cmdline'])}")
+            os.kill(pid, signal.SIGTERM)  # Graceful termination
+        except (psutil.NoSuchProcess, PermissionError):
+            logging.info(f"Failed to kill PID {pid}")
+
+    logging.info("Done.")
+
+# force cleanup
+#_cleanup_old_webapps()
+
+
+# --------------------------------------------------
+#    Functions
+# --------------------------------------------------
+def _convert_public_to_save_path(public_url: str) -> str:
+    """
+    Converts a publicly accessible URL back to the corresponding file path in SAVE_FILE_DIR.
+
+    Parameters:
+        public_url (str): The public URL.
+
+    Returns:
+        str: The absolute path of the file in SAVE_FILE_DIR.
+    """
+    if not public_url.startswith(URL_PREFIX):
+        raise Exception("Error! URL does not match expected prefix.")
+
+    # Extract UUID-prefixed filename from the public URL
+    filename = os.path.basename(public_url)
+
+    # Reconstruct the full file path inside SAVE_FILE_DIR
+    file_path = os.path.join(SAVE_FILE_DIR, filename)
+
+    if not os.path.exists(file_path):
+        raise Exception("Error! File does not exist in SAVE_FILE_DIR.")
+
+    return file_path
+
+
+def _convert_tmp_to_public(src_filepath: str) -> dict:
+    """
+    Converts a file path inside /tmp/ to a publicly accessible URL.
+
+    Parameters:
+        src_filepath (str): The absolute path inside /tmp/
+
+    Returns:
+        dict: A dictionary containing the public URL and content type
+    """
+    # Ensure the path is inside /tmp/
+    src_filepath = os.path.abspath(src_filepath)
+    if not src_filepath.startswith('/tmp/'):
+        raise Exception('Error!  Generated file must be in /tmp/ directory')
+
+    # Ensure the file exists
+    if not os.path.exists(src_filepath):
+        raise Exception('Error!  File not found!')
+
+    # Generate a unique filename
+    src_filename = os.path.basename(src_filepath)
+    dst_filename = f"{uuid.uuid4().hex}_{src_filename}"
+    dst_filepath = os.path.join(SAVE_FILE_DIR, dst_filename)
+
+    # Copy file or directory
+    if os.path.isfile(src_filepath):
+        shutil.copy(src_filepath, dst_filepath)
+    else:
+        shutil.copytree(src_filepath, dst_filepath)
+
+    # Construct the public URL
+    return os.path.join(URL_PREFIX, dst_filename), dst_filename
+
+
+def _find_free_port(start=9000, end=10000):
+    for port in range(start, end + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("localhost", port)) != 0:
+                return port
+
 def echo(msg: str) -> dict:
     """
     Echoes back a message as a test.
@@ -89,7 +199,15 @@ def echo(msg: str) -> dict:
             - 'body' (str): The echoed message.
             - 'content-type' (str): The MIME type of the response.
     """
-    return {'body': msg, 'content-type': 'text/plain'}
+    logging.info('==================================================')
+    logging.info(f'echo')
+    logging.info('==================================================')
+    logging.info(f'\n{msg}\n')
+    d = {'body': msg, 'content-type': 'text/plain'}
+    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+    logging.info(f'\n{d}\n')
+    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+    return d
 
 
 def _exec_python_code(code: str) -> dict:
@@ -104,8 +222,6 @@ def _exec_python_code(code: str) -> dict:
             - 'body' (str): The result of the executed code. If an error occurs, this contains the traceback.
             - 'content-type' (str): The MIME type of the response, either 'text/plain' for success or 'text/error' for errors.
     """
-    print(code)
-
     globals_dict = INJECTED_GLOBALS.copy()
 
     # local_vars = {}
@@ -133,7 +249,15 @@ def exec_python_code_return_string(code: str) -> dict:
             - 'content-type' (str): The MIME type of the response, either 'text/plain' for success
                                     or 'text/error' if an exception occurs.
     """
-    return _exec_python_code(code)
+    logging.info('==================================================')
+    logging.info(f'exec_python_code_return_string')
+    logging.info('==================================================')
+    logging.info(f'\n{code}\n\n')
+    d = _exec_python_code(code)
+    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+    logging.info(f'\n{d}\n')
+    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+    return d
 
 
 def exec_python_code_return_URL(code: str) -> dict:
@@ -159,23 +283,113 @@ def exec_python_code_return_URL(code: str) -> dict:
         controlled storage location with an obfuscated filename, and only the returned URL can
         be used to access it.
     """
+    logging.info('==================================================')
+    logging.info(f'exec_python_code_return_URL')
+    logging.info('==================================================')
+    logging.info(f'\n{code}\n\n')
+
     retval = _exec_python_code(code)
     if retval['content-type'] == 'text/error':
         return retval
 
     src_filepath = retval['body']
-    src_filepath = os.path.abspath(src_filepath)
-    if not src_filepath.startswith('/tmp/'):
-        raise Exception('Error!  Generated file must be in /tmp/ directory')
 
-    if not os.path.exists(src_filepath):
-        raise Exception('Error!  File not found!')
-
-    src_filename = os.path.basename(src_filepath)
-    dst_filename = f"{uuid.uuid4().hex}_{src_filename}"
-    dst_filepath = os.path.join(SAVE_FILE_DIR, dst_filename)
-    shutil.copy(src_filepath, dst_filepath)
+    dst_filepath, dst_filename = _convert_tmp_to_public(src_filepath)
+    #
+    #
+    # src_filepath = os.path.abspath(src_filepath)
+    # if not src_filepath.startswith('/tmp/'):
+    #     raise Exception('Error!  Generated file must be in /tmp/ directory')
+    #
+    # if not os.path.exists(src_filepath):
+    #     raise Exception('Error!  File not found!')
+    #
+    # src_filename = os.path.basename(src_filepath)
+    # dst_filename = f"{uuid.uuid4().hex}_{src_filename}"
+    # dst_filepath = os.path.join(SAVE_FILE_DIR, dst_filename)
+    if os.path.isfile(src_filepath):
+        shutil.copy(src_filepath, dst_filepath)
+    else:
+        shutil.copytree(src_filepath, dst_filepath)
 
     url = os.path.join(URL_PREFIX, dst_filename)
-    print(f'\bGenerated URL: {url}')
-    return {'body': url, 'content-type': 'text/uri-list'}
+    d = {'body': url, 'content-type': 'text/uri-list'}
+    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+    logging.info(f'\n{d}\n')
+    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+    return d
+
+
+
+def exec_pylinkjs_app(url: str) -> dict:
+    """
+    Launches a pylinkjs application from the specified URL in an isolated environment and
+    returns a secure, dynamically assigned URL to access it.
+
+    Parameters:
+        url (str): The external URL pointing to the pylinkjs application source code. The function
+                   maps this to an internal file location where the app is stored.
+
+    Returns:
+        dict: A dictionary containing the response with:
+            - 'body' (str): A unique URL where the pylinkjs application can be accessed.
+            - 'content-type' (str): The MIME type of the response, set to 'text/uri-list' for success.
+
+    Raises:
+        Exception: If the application directory cannot be determined or the application fails to start.
+
+    Security Notice:
+        The pylinkjs application runs in an isolated environment. The assigned network port is
+        dynamically allocated to avoid conflicts, and the application remains accessible only
+        through the returned URL.
+    """
+    logging.info('==================================================')
+    logging.info(f'exec_pylinkjs_app')
+    logging.info('==================================================')
+    logging.info(f'\n{url}\n\n')
+
+    # Extract internal file location from the given URL
+    _, _, webapp_dir = url.rpartition('/files/')
+    webapp_dir = os.path.join(SAVE_FILE_DIR, webapp_dir)
+
+    # Define the expected pylinkjs entry point
+    webapp_app_path = os.path.join(webapp_dir, 'app.py')
+
+    # Find an available network port within the specified range
+    free_port = _find_free_port(start=9000, end=10000)
+
+    # Launch the pylinkjs application in the background
+    subprocess.Popen(
+        [sys.executable, webapp_app_path, '--port', str(free_port)],
+        close_fds=True,
+        cwd=webapp_dir
+    )
+
+    # generate the redirect file
+    redirect_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta http-equiv="refresh" content="0; url={WEBAPP_URL_PREFIX}:{free_port}">
+            <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+            <meta http-equiv="Pragma" content="no-cache">
+            <meta http-equiv="Expires" content="0">
+            <title>Redirecting...</title>
+        </head>
+        <body>
+            <p>If you are not redirected, <a href="{WEBAPP_URL_PREFIX}:{free_port}">click here</a>.</p>
+        </body>
+        </html>
+    """
+    save_path = _convert_public_to_save_path(url)
+    dst_filepath = os.path.join(save_path, 'redirect.html')
+    with open(dst_filepath, 'w') as f:
+        f.write(redirect_html)
+
+    # Return the URL where the application is accessible
+    d = {'body': f"{os.path.join(url, 'redirect.html')}", 'content-type': 'text/uri-list'}
+    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+    logging.info(f'\n{d}\n')
+    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+    return d
+    
