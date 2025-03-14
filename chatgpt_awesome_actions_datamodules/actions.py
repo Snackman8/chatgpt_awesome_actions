@@ -15,6 +15,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 import traceback
 import uuid
 
@@ -189,13 +190,15 @@ def _find_free_port(start=9000, end=10000):
             if s.connect_ex(("localhost", port)) != 0:
                 return port
 
-def _update_monitor(target, value):
+def _update_monitor(uid, target, value):
     """Send an asynchronous GET request to update the monitor."""
     def send_request():
         url = os.path.join(MONITOR_URL_PREFIX, 'update_monitor')
         params = {
+            "uid": uid,
             "target": target,
-            "value": value
+            "value": value,
+            'time': time.time()
         }
         try:
             requests.get(url, params=params, timeout=10)
@@ -226,9 +229,6 @@ def echo(msg: str) -> dict:
     logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
     logging.info(f'\n{d}\n')
     logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
-
-    # update the monitor
-    _update_monitor('#code', str(d))
 
     return d
 
@@ -277,10 +277,11 @@ def exec_python_code_return_string(code: str) -> dict:
     logging.info('==================================================')
     logging.info(f'\n{code}\n\n')
     # update the monitor
-    _update_monitor('#code', str(code))
-    _update_monitor('#retval', 'Running...')
+    uid = 'exec_python_code_return_string:' + str(uuid.uuid4())
+    _update_monitor(uid, 'code', str(code))
+    _update_monitor(uid, 'retval', 'Running...')
     d = _exec_python_code(code)
-    _update_monitor('#retval', f'<pre>{html.escape(str(d["body"]))}</pre>')
+    _update_monitor(uid, 'retval', f'<pre>{html.escape(str(d["body"]))}</pre>')
     logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
     logging.info(f'\n{d}\n')
     logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
@@ -315,14 +316,14 @@ def exec_python_code_return_URL(code: str) -> dict:
     logging.info('==================================================')
     logging.info(f'\n{code}\n\n')
     # update the monitor
-    _update_monitor('#code', str(code))
-    _update_monitor('#retval', 'Running...')
+    uid = 'exec_python_code_return_URL:' + str(uuid.uuid4())
+    _update_monitor(uid, 'code', str(code))
+    _update_monitor(uid, 'retval', 'Running...')
 
     retval = _exec_python_code(code)
 
-    _update_monitor('#retval', retval['body'])
-
     if retval['content-type'] == 'text/error':
+        _update_monitor(uid, 'retval', str(retval))
         return retval
 
     src_filepath = retval['body']
@@ -339,17 +340,19 @@ def exec_python_code_return_URL(code: str) -> dict:
     d = {'body': url, 'content-type': 'text/uri-list'}
 
 
-    s = f'<pre>{html.escape(url)}\n\n</pre>'
+    s = f'<a href={url}>{html.escape(url)}</a><hr>'
     if url.endswith('.png'):
         s = s + f'<img src={url}>'
     else:
         try:
             with open(src_filepath, 'r') as f:
-                s = s + f'<pre>{html.escape(f.read())}\n\n</pre>'
+                s = s + f'<pre>{html.escape(f.read())[:30000]}\n\n</pre>'
+
         except Exception as e:
+            logging.exception(e)
             s = s + f'<pre>{html.escape(str(e))}\n\n</pre>'
 
-    _update_monitor('#retval', s)
+    _update_monitor(uid, 'retval', s)
 
 
 

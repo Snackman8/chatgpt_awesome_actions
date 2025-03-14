@@ -1,0 +1,16 @@
+[Unit]
+Description=Provide ChatGTP Awesome Actions API Monitor
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+TimeoutStopSec=15
+
+Type=simple
+Restart=on-failure
+KillSignal=SIGINT
+ExecStart=/bin/sh -c '. /run/chatgpt_awesome_actions.env && exec /usr/local/pipx/venvs/chatgpt-awesome-actions/bin/chatgpt_awesome_actions_monitor --port 8300' 
+
+StandardOutput=append:/var/log/chatgpt_awesome_actions_monitor.log
+StandardError=append:/var/log/chatgpt_awesome_actions_monitor.log
