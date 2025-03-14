@@ -5,5 +5,6 @@ folium
 selenium
 tabulate
 bokeh
+plotly
 psutil
 pylinkjs @ git+https://github.com/Snackman8/pyLinkJS.git

@@ -2,19 +2,21 @@
 #    Imports
 # --------------------------------------------------
 import configparser
+import html
 import importlib
 import inspect
 import logging
 import os
 import psutil
+import requests
 import shutil
 import signal
 import socket
 import subprocess
 import sys
+import threading
 import traceback
 import uuid
-
 
 # --------------------------------------------------
 #    Globals
@@ -56,6 +58,7 @@ MODULE_LIST_STR = '' if CONFIG is None else CONFIG.get('ModuleInjection', 'modul
 SAVE_FILE_DIR = DEFAULT_SAVE_FILE_PATH if CONFIG is None else CONFIG.get('FileGeneration', 'save_file_path', fallback=DEFAULT_SAVE_FILE_PATH)
 URL_PREFIX = 'http://localhost' if CONFIG is None else CONFIG.get('FileGeneration', 'url_prefix', fallback='http://localhost')
 WEBAPP_URL_PREFIX = 'http://localhost' if CONFIG is None else CONFIG.get('WebApps', 'url_prefix', fallback='http://localhost')
+MONITOR_URL_PREFIX = None if CONFIG is None else CONFIG.get('Monitoring', 'monitor_url', fallback=None)
 
 
 # --------------------------------------------------
@@ -186,6 +189,23 @@ def _find_free_port(start=9000, end=10000):
             if s.connect_ex(("localhost", port)) != 0:
                 return port
 
+def _update_monitor(target, value):
+    """Send an asynchronous GET request to update the monitor."""
+    def send_request():
+        url = os.path.join(MONITOR_URL_PREFIX, 'update_monitor')
+        params = {
+            "target": target,
+            "value": value
+        }
+        try:
+            requests.get(url, params=params, timeout=10)
+        except requests.exceptions.RequestException:
+            pass  # Ignore errors since we don't need a response
+
+    # Run the request in a separate thread
+    if MONITOR_URL_PREFIX:
+        threading.Thread(target=send_request).start()
+
 def echo(msg: str) -> dict:
     """
     Echoes back a message as a test.
@@ -206,6 +226,10 @@ def echo(msg: str) -> dict:
     logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
     logging.info(f'\n{d}\n')
     logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+
+    # update the monitor
+    _update_monitor('#code', str(d))
+
     return d
 
 
@@ -252,7 +276,11 @@ def exec_python_code_return_string(code: str) -> dict:
     logging.info(f'exec_python_code_return_string')
     logging.info('==================================================')
     logging.info(f'\n{code}\n\n')
+    # update the monitor
+    _update_monitor('#code', str(code))
+    _update_monitor('#retval', 'Running...')
     d = _exec_python_code(code)
+    _update_monitor('#retval', f'<pre>{html.escape(str(d["body"]))}</pre>')
     logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
     logging.info(f'\n{d}\n')
     logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
@@ -286,8 +314,14 @@ def exec_python_code_return_URL(code: str) -> dict:
     logging.info(f'exec_python_code_return_URL')
     logging.info('==================================================')
     logging.info(f'\n{code}\n\n')
+    # update the monitor
+    _update_monitor('#code', str(code))
+    _update_monitor('#retval', 'Running...')
 
     retval = _exec_python_code(code)
+
+    _update_monitor('#retval', retval['body'])
+
     if retval['content-type'] == 'text/error':
         return retval
 
@@ -295,18 +329,7 @@ def exec_python_code_return_URL(code: str) -> dict:
 
     dst_filepath, dst_filename = _convert_tmp_to_save_path(src_filepath)
     logging.info(f'Copying {src_filepath} to {dst_filepath}.  filename={dst_filename}')
-    #
-    #
-    # src_filepath = os.path.abspath(src_filepath)
-    # if not src_filepath.startswith('/tmp/'):
-    #     raise Exception('Error!  Generated file must be in /tmp/ directory')
-    #
-    # if not os.path.exists(src_filepath):
-    #     raise Exception('Error!  File not found!')
-    #
-    # src_filename = os.path.basename(src_filepath)
-    # dst_filename = f"{uuid.uuid4().hex}_{src_filename}"
-    # dst_filepath = os.path.join(SAVE_FILE_DIR, dst_filename)
+
     if os.path.isfile(src_filepath):
         shutil.copy(src_filepath, dst_filepath)
     else:
@@ -314,11 +337,27 @@ def exec_python_code_return_URL(code: str) -> dict:
 
     url = os.path.join(URL_PREFIX, dst_filename)
     d = {'body': url, 'content-type': 'text/uri-list'}
+
+
+    s = f'<pre>{html.escape(url)}\n\n</pre>'
+    if url.endswith('.png'):
+        s = s + f'<img src={url}>'
+    else:
+        try:
+            with open(src_filepath, 'r') as f:
+                s = s + f'<pre>{html.escape(f.read())}\n\n</pre>'
+        except Exception as e:
+            s = s + f'<pre>{html.escape(str(e))}\n\n</pre>'
+
+    _update_monitor('#retval', s)
+
+
+
     logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
     logging.info(f'\n{d}\n')
     logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
-    return d
 
+    return d
 
 
 def exec_pylinkjs_app(url: str) -> dict:
