@@ -13,6 +13,7 @@ setup(name='chatgpt_awesome_actions',
       install_requires=read_requirements(),
       package_data={
         "chatgpt_awesome_actions_datamodules": ["_static/**/*"],  # Include all files inside _static
+        "chatgpt_awesome_actions_monitoring_webapp": ["*.html"],  # Includes all .html files in this package
       },
       entry_points={
         'console_scripts': ['chatgpt_awesome_actions_monitor=chatgpt_awesome_actions_monitoring_webapp.webapp_chatgpt_awesome_actions_monitoring:console_entry'],
