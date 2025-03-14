@@ -95,7 +95,7 @@ def handle_404(path, uri, *args):
 # --------------------------------------------------
 #    Main
 # --------------------------------------------------
-if __name__ == '__main__':
+def console_entry():
     # setup the logger
     logging.basicConfig(level=logging.DEBUG, format='%(relativeCreated)6d %(threadName)s %(message)s')
 
@@ -110,3 +110,8 @@ if __name__ == '__main__':
                      on_404=handle_404,
                      internal_polling_interval=0.025,
                      port=args['port'])
+
+
+if __name__ == "__main__":
+    # parse command line arguments
+    console_entry()
