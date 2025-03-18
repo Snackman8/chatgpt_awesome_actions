@@ -1,6 +1,7 @@
 # --------------------------------------------------
 #    Imports
 # --------------------------------------------------
+import ast
 import configparser
 import html
 import importlib
@@ -91,33 +92,33 @@ if MODULE_LIST_STR.strip() != '':
 # --------------------------------------------------
 #    Functions
 # --------------------------------------------------
-def _cleanup_old_webapps():
-    # Look for processes containing "/app.py" and "--port"
-    logging.info(f"Cleaning up old webapps")
-    matching_processes = []
-    for process in psutil.process_iter(attrs=["pid", "name", "cmdline"]):
-        try:
-            cmdline = process.info["cmdline"]
-            if (
-                cmdline and
-                any("/app.py" in arg for arg in cmdline) and
-                any("--port" in arg for arg in cmdline) and
-                cmdline[0] == sys.executable
-            ):
-                matching_processes.append(process.info)
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass  # Process no longer exists or permission denied
-
-    # Kill matching processes
-    for proc in matching_processes:
-        try:
-            pid = proc["pid"]
-            logging.info(f"Killing PID {pid}: {' '.join(proc['cmdline'])}")
-            os.kill(pid, signal.SIGTERM)  # Graceful termination
-        except (psutil.NoSuchProcess, PermissionError):
-            logging.info(f"Failed to kill PID {pid}")
-
-    logging.info("Done.")
+# def _cleanup_old_webapps():
+#     # Look for processes containing "/app.py" and "--port"
+#     logging.info(f"Cleaning up old webapps")
+#     matching_processes = []
+#     for process in psutil.process_iter(attrs=["pid", "name", "cmdline"]):
+#         try:
+#             cmdline = process.info["cmdline"]
+#             if (
+#                 cmdline and
+#                 any("/app.py" in arg for arg in cmdline) and
+#                 any("--port" in arg for arg in cmdline) and
+#                 cmdline[0] == sys.executable
+#             ):
+#                 matching_processes.append(process.info)
+#         except (psutil.NoSuchProcess, psutil.AccessDenied):
+#             pass  # Process no longer exists or permission denied
+#
+#     # Kill matching processes
+#     for proc in matching_processes:
+#         try:
+#             pid = proc["pid"]
+#             logging.info(f"Killing PID {pid}: {' '.join(proc['cmdline'])}")
+#             os.kill(pid, signal.SIGTERM)  # Graceful termination
+#         except (psutil.NoSuchProcess, PermissionError):
+#             logging.info(f"Failed to kill PID {pid}")
+#
+#     logging.info("Done.")
 
 # force cleanup
 #_cleanup_old_webapps()
@@ -201,6 +202,7 @@ def _update_monitor(uid, target, value):
             'time': time.time()
         }
         try:
+            logging.info('Sending Monitor Info!')
             requests.get(url, params=params, timeout=10)
         except requests.exceptions.RequestException:
             pass  # Ignore errors since we don't need a response
@@ -254,184 +256,226 @@ def _exec_python_code(code: str) -> dict:
         return {'body': data, 'content-type': 'text/plain'}
 
     except:
-        print(traceback.format_exc())
+        logging.exception(traceback.format_exc())
         return {'body': traceback.format_exc(), 'content-type': 'text/error'}
 
 
-def exec_python_code_return_string(code: str) -> dict:
+def _deep_publish_tmp_paths(data, changed_strings=None):
     """
-    Executes the provided Python code and returns the result as a string.
+    Recursively replaces any string that starts with '/tmp/' in a given data structure
+    while maintaining its original type.
 
     Parameters:
-        code (str): The Python code to execute. The code must assign a value to `__retval__`
-                    for this function to return meaningful data.
+        data (any type): The input variable (can be list, dict, tuple, set, etc.).
+        changed_strings (list): A list to collect replaced '/tmp/' strings (used in recursion).
 
     Returns:
-        dict: A dictionary containing the response with:
-            - 'body' (str): The result of the executed code, extracted from `__retval__`.
-            - 'content-type' (str): The MIME type of the response, either 'text/plain' for success
-                                    or 'text/error' if an exception occurs.
+        tuple:
+        - Modified structure with replacements applied.
+        - List of changed '/tmp/' strings (original -> new path).
     """
-    logging.info('==================================================')
-    logging.info(f'exec_python_code_return_string')
-    logging.info('==================================================')
-    logging.info(f'\n{code}\n\n')
-    # update the monitor
-    uid = 'exec_python_code_return_string:' + str(uuid.uuid4())
-    _update_monitor(uid, 'code', str(code))
-    _update_monitor(uid, 'retval', 'Running...')
-    d = _exec_python_code(code)
-    _update_monitor(uid, 'retval', f'<pre>{html.escape(str(d["body"]))}</pre>')
-    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
-    logging.info(f'\n{d}\n')
-    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
-    return d
+    if changed_strings is None:
+        changed_strings = []  # Initialize tracking list only at root call
+
+    if isinstance(data, str):
+        if data.startswith('/tmp/'):
+            dst_filepath, dst_filename = _convert_tmp_to_save_path(data)
+            logging.info(f'Copying {data} to {dst_filepath}.  filename={dst_filename}')
+
+            preview = ''
+            if os.path.isfile(data):
+                shutil.copy(data, dst_filepath)
+                try:
+                    with open(data, 'r') as f:
+                        preview = f.read(5000)
+                except:
+                    preview = 'Error while reading file'
+                os.remove(data)
+            elif os.path.isdir(data):
+                preview = 'Can not preview directory'
+                shutil.copytree(data, dst_filepath)
+                shutil.rmtree(data)
+
+            url = os.path.join(URL_PREFIX, dst_filename)
+            changed_strings.append((preview, url))  # Track changes
+            return url, changed_strings
+        else:
+            return data, changed_strings
+
+    elif isinstance(data, list):
+        modified_list = []
+        for item in data:
+            modified_item, changed_strings = _deep_publish_tmp_paths(item, changed_strings)
+            modified_list.append(modified_item)
+        return modified_list, changed_strings
+
+    elif isinstance(data, tuple):
+        modified_tuple = []
+        for item in data:
+            modified_item, changed_strings = _deep_publish_tmp_paths(item, changed_strings)
+            modified_tuple.append(modified_item)
+        return tuple(modified_tuple), changed_strings
+
+    elif isinstance(data, set):
+        modified_set = set()
+        for item in data:
+            modified_item, changed_strings = _deep_publish_tmp_paths(item, changed_strings)
+            modified_set.add(modified_item)
+        return modified_set, changed_strings
+
+    elif isinstance(data, dict):
+        modified_dict = {}
+        for key, value in data.items():
+            modified_value, changed_strings = _deep_publish_tmp_paths(value, changed_strings)
+            modified_dict[key] = modified_value
+        return modified_dict, changed_strings
+
+    else:
+        return data, changed_strings  # Return unchanged if not a recognized type
 
 
-def exec_python_code_return_URL(code: str) -> dict:
+def exec_python_code(code: str) -> dict:
     """
-    Executes Python code that generates a file in the `/tmp/` directory and returns a secure,
-    obfuscated URL to access it.
+    Executes Python code on a remote machine.
+
+    Any strings in the return value that start with `/tmp/` will automatically be converted to
+    published URLs, and the corresponding temporary files will be deleted after publication.
 
     Parameters:
-        code (str): The Python code to execute. The code must define the absolute file path in the
-                    `__retval__` variable, pointing to a file saved in the `/tmp/` directory.
+        code (str): The Python code to execute. The code must assign a value to `__retval__`,
+                    which can be any data type. If `__retval__` contains strings starting with
+                    `/tmp/`, they will be replaced with secure URLs before returning.
 
     Returns:
-        dict: A dictionary containing the response with:
-            - 'body' (str): A secure, opaque URL pointing to the file's contents. The file is not
-                            directly accessible from `/tmp/` and can only be retrieved via the provided URL.
-            - 'content-type' (str): The MIME type of the response, set to 'text/uri-list' for success.
+        dict: A dictionary containing the execution result with:
+            - 'body' (any): The return value of the executed Python code. Any file paths from `/tmp/`
+                            will be replaced with secure URLs.
+            - 'content-type' (str): The MIME type of the response, dynamically set based on the
+                                    returned content.
 
     Raises:
-        Exception: If the generated file is not located in the `/tmp/` directory or does not exist.
+        Exception: If the execution fails due to an error in the provided code.
 
-    Security Notice:
-        The generated file in `/tmp/` is not directly accessible. Instead, it is copied to a
-        controlled storage location with an obfuscated filename, and only the returned URL can
-        be used to access it.
+    Notes:
+        - Temporary files in `/tmp/` are automatically published as secure URLs and deleted
+          from the local filesystem.
+        - The execution environment is remote and does not retain state between calls.
     """
-    logging.info('==================================================')
-    logging.info(f'exec_python_code_return_URL')
-    logging.info('==================================================')
-    logging.info(f'\n{code}\n\n')
-    # update the monitor
-    uid = 'exec_python_code_return_URL:' + str(uuid.uuid4())
-    _update_monitor(uid, 'code', str(code))
-    _update_monitor(uid, 'retval', 'Running...')
+    try:
+        logging.info('==================================================')
+        logging.info(f'exec_python_code ')
+        logging.info('==================================================')
+        logging.info(f'\n{code}\n\n')
+        # update the monitor
+        uid = 'exec_python_code :' + str(uuid.uuid4())
+        _update_monitor(uid, 'code', str(code))
+        _update_monitor(uid, 'retval', 'Running...')
 
-    retval = _exec_python_code(code)
+        retval = _exec_python_code(code)
 
-    if retval['content-type'] == 'text/error':
-        _update_monitor(uid, 'retval', str(retval))
-        return retval
+        if retval['content-type'] == 'text/error':
+            _update_monitor(uid, 'retval', str(retval))
+            return retval
 
-    src_filepath = retval['body']
-
-    dst_filepath, dst_filename = _convert_tmp_to_save_path(src_filepath)
-    logging.info(f'Copying {src_filepath} to {dst_filepath}.  filename={dst_filename}')
-
-    if os.path.isfile(src_filepath):
-        shutil.copy(src_filepath, dst_filepath)
-    else:
-        shutil.copytree(src_filepath, dst_filepath)
-
-    url = os.path.join(URL_PREFIX, dst_filename)
-    d = {'body': url, 'content-type': 'text/uri-list'}
-
-
-    s = f'<a href={url}>{html.escape(url)}</a><hr>'
-    if url.endswith('.png'):
-        s = s + f'<img src={url}>'
-    else:
         try:
-            with open(src_filepath, 'r') as f:
-                s = s + f'<pre>{html.escape(f.read())[:30000]}\n\n</pre>'
+            r = ast.literal_eval(retval['body'])
+        except:
+            r = str(retval['body'])
 
-        except Exception as e:
-            logging.exception(e)
-            s = s + f'<pre>{html.escape(str(e))}\n\n</pre>'
+        r, published_urls = _deep_publish_tmp_paths(r)
 
-    _update_monitor(uid, 'retval', s)
+        d = {'body': str(r), 'content-type': 'text/uri-list'}
+
+        # handle the monitor
+        s = f'<pre>{str(r)}</pre>'
+        logging.info('PUBLISHED URLS')
+        logging.info(str(published_urls))
+        for preview, url in published_urls:
+            s = s + f'<br><a href={url}>{html.escape(url)}</a><hr>'
+            if url.endswith('.png'):
+                s = s + f'<img src={url}>'
+            else:
+                s = s + f'<div style="border: solid 1px grey"><pre>{html.escape(preview)}</pre></div>'
+        _update_monitor(uid, 'retval', s)
+        logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+        logging.info(f'\n{d}\n')
+        logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+
+        return d
+    except Exception as e:
+        logging.exception(e)
+        raise(e)
 
 
-
-    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
-    logging.info(f'\n{d}\n')
-    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
-
-    return d
-
-
-def exec_pylinkjs_app(url: str) -> dict:
-    """
-    Launches a pylinkjs application from the specified URL in an isolated environment and
-    returns a secure, dynamically assigned URL to access it.
-
-    Parameters:
-        url (str): The external URL pointing to the pylinkjs application source code. The function
-                   maps this to an internal file location where the app is stored.
-
-    Returns:
-        dict: A dictionary containing the response with:
-            - 'body' (str): A unique URL where the pylinkjs application can be accessed.
-            - 'content-type' (str): The MIME type of the response, set to 'text/uri-list' for success.
-
-    Raises:
-        Exception: If the application directory cannot be determined or the application fails to start.
-
-    Security Notice:
-        The pylinkjs application runs in an isolated environment. The assigned network port is
-        dynamically allocated to avoid conflicts, and the application remains accessible only
-        through the returned URL.
-    """
-    logging.info('==================================================')
-    logging.info(f'exec_pylinkjs_app')
-    logging.info('==================================================')
-    logging.info(f'\n{url}\n\n')
-
-    # Extract internal file location from the given URL
-    _, _, webapp_dir = url.rpartition('/files/')
-    webapp_dir = os.path.join(SAVE_FILE_DIR, webapp_dir)
-
-    # Define the expected pylinkjs entry point
-    webapp_app_path = os.path.join(webapp_dir, 'app.py')
-
-    # Find an available network port within the specified range
-    free_port = _find_free_port(start=9000, end=10000)
-
-    # Launch the pylinkjs application in the background
-    subprocess.Popen(
-        [sys.executable, webapp_app_path, '--port', str(free_port)],
-        close_fds=True,
-        cwd=webapp_dir
-    )
-
-    # generate the redirect file
-    redirect_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta http-equiv="refresh" content="0; url={WEBAPP_URL_PREFIX}:{free_port}">
-            <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
-            <meta http-equiv="Pragma" content="no-cache">
-            <meta http-equiv="Expires" content="0">
-            <title>Redirecting...</title>
-        </head>
-        <body>
-            <p>If you are not redirected, <a href="{WEBAPP_URL_PREFIX}:{free_port}">click here</a>.</p>
-        </body>
-        </html>
-    """
-    save_path = _convert_public_to_save_path(url)
-    dst_filepath = os.path.join(save_path, 'redirect.html')
-    with open(dst_filepath, 'w') as f:
-        f.write(redirect_html)
-
-    # Return the URL where the application is accessible
-    d = {'body': f"{os.path.join(url, 'redirect.html')}", 'content-type': 'text/uri-list'}
-    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
-    logging.info(f'\n{d}\n')
-    logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
-    return d
+# def exec_pylinkjs_app(url: str) -> dict:
+#     """
+#     Launches a pylinkjs application from the specified URL in an isolated environment and
+#     returns a secure, dynamically assigned URL to access it.
+#
+#     Parameters:
+#         url (str): The external URL pointing to the pylinkjs application source code. The function
+#                    maps this to an internal file location where the app is stored.
+#
+#     Returns:
+#         dict: A dictionary containing the response with:
+#             - 'body' (str): A unique URL where the pylinkjs application can be accessed.
+#             - 'content-type' (str): The MIME type of the response, set to 'text/uri-list' for success.
+#
+#     Raises:
+#         Exception: If the application directory cannot be determined or the application fails to start.
+#
+#     Security Notice:
+#         The pylinkjs application runs in an isolated environment. The assigned network port is
+#         dynamically allocated to avoid conflicts, and the application remains accessible only
+#         through the returned URL.
+#     """
+#     logging.info('==================================================')
+#     logging.info(f'exec_pylinkjs_app')
+#     logging.info('==================================================')
+#     logging.info(f'\n{url}\n\n')
+#
+#     # Extract internal file location from the given URL
+#     _, _, webapp_dir = url.rpartition('/files/')
+#     webapp_dir = os.path.join(SAVE_FILE_DIR, webapp_dir)
+#
+#     # Define the expected pylinkjs entry point
+#     webapp_app_path = os.path.join(webapp_dir, 'app.py')
+#
+#     # Find an available network port within the specified range
+#     free_port = _find_free_port(start=9000, end=10000)
+#
+#     # Launch the pylinkjs application in the background
+#     subprocess.Popen(
+#         [sys.executable, webapp_app_path, '--port', str(free_port)],
+#         close_fds=True,
+#         cwd=webapp_dir
+#     )
+#
+#     # generate the redirect file
+#     redirect_html = f"""
+#         <!DOCTYPE html>
+#         <html>
+#         <head>
+#             <meta http-equiv="refresh" content="0; url={WEBAPP_URL_PREFIX}:{free_port}">
+#             <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+#             <meta http-equiv="Pragma" content="no-cache">
+#             <meta http-equiv="Expires" content="0">
+#             <title>Redirecting...</title>
+#         </head>
+#         <body>
+#             <p>If you are not redirected, <a href="{WEBAPP_URL_PREFIX}:{free_port}">click here</a>.</p>
+#         </body>
+#         </html>
+#     """
+#     save_path = _convert_public_to_save_path(url)
+#     dst_filepath = os.path.join(save_path, 'redirect.html')
+#     with open(dst_filepath, 'w') as f:
+#         f.write(redirect_html)
+#
+#     # Return the URL where the application is accessible
+#     d = {'body': f"{os.path.join(url, 'redirect.html')}", 'content-type': 'text/uri-list'}
+#     logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+#     logging.info(f'\n{d}\n')
+#     logging.info('\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n')
+#     return d
     

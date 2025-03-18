@@ -32,74 +32,12 @@ paths:
                     type: string
                 type: object
           description: Successful Response
-  /actions/exec_pylinkjs_app:
+  /actions/exec_python_code:
     post:
-      description: Launches a pylinkjs application from the specified URL in an isolated
-        environment and returns a secure, dynamically assigned URL to access it.
-      operationId: actions__exec_pylinkjs_app
-      requestBody:
-        content:
-          application/json:
-            schema:
-              properties:
-                url:
-                  description: The external URL pointing to the pylinkjs application
-                    source code. The function
-                  type: string
-              type: object
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                description: 'A dictionary containing the response with:'
-                properties:
-                  body:
-                    description: A unique URL where the pylinkjs application can be
-                      accessed.
-                    type: string
-                  content-type:
-                    description: The MIME type of the response, set to 'text/uri-list'
-                      for success.
-                    type: string
-                type: object
-          description: Successful Response
-  /actions/exec_python_code_return_URL:
-    post:
-      description: Executes Python code that generates a file in the `/tmp/` directory
-        and returns a secure, obfuscated URL to access it.
-      operationId: actions__exec_python_code_return_URL
-      requestBody:
-        content:
-          application/json:
-            schema:
-              properties:
-                code:
-                  description: The Python code to execute. The code must define the
-                    absolute file path in the
-                  type: string
-              type: object
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                description: 'A dictionary containing the response with:'
-                properties:
-                  body:
-                    description: A secure, opaque URL pointing to the file's contents.
-                      The file is not
-                    type: string
-                  content-type:
-                    description: The MIME type of the response, set to 'text/uri-list'
-                      for success.
-                    type: string
-                type: object
-          description: Successful Response
-  /actions/exec_python_code_return_string:
-    post:
-      description: Executes the provided Python code and returns the result as a string.
-      operationId: actions__exec_python_code_return_string
+      description: Executes Python code on a remote machine. Any strings in the return
+        value that start with `/tmp/` will automatically be converted to published
+        URLs, and the corresponding temporary files will be deleted after publication.
+      operationId: actions__exec_python_code
       requestBody:
         content:
           application/json:
@@ -107,7 +45,7 @@ paths:
               properties:
                 code:
                   description: The Python code to execute. The code must assign a
-                    value to `__retval__`
+                    value to `__retval__`,
                   type: string
               type: object
       responses:
@@ -115,14 +53,15 @@ paths:
           content:
             application/json:
               schema:
-                description: 'A dictionary containing the response with:'
+                description: 'A dictionary containing the execution result with:'
                 properties:
                   body:
-                    description: The result of the executed code, extracted from `__retval__`.
+                    description: The return value of the executed Python code. Any
+                      file paths from `/tmp/`
                     type: string
                   content-type:
-                    description: The MIME type of the response, either 'text/plain'
-                      for success
+                    description: The MIME type of the response, dynamically set based
+                      on the
                     type: string
                 type: object
           description: Successful Response
