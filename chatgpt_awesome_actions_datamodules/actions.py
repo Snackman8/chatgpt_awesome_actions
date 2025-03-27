@@ -41,6 +41,9 @@ url_prefix = http://localhost
 [ModuleInjection]
 module_list = testmod.xx
 
+[FileInjection]
+file_list = /srv/test1.py,/srv/test2.py
+
 [Logging]
 log_level = INFO
 """
@@ -57,6 +60,7 @@ if os.path.isfile(CONFIG_FILE):
 # --------------------------------------------------
 LOG_LEVEL  = 'INFO' if CONFIG is None else CONFIG.get('Logging', 'log_level', fallback='INFO')
 MODULE_LIST_STR = '' if CONFIG is None else CONFIG.get('ModuleInjection', 'module_list', fallback='')
+FILE_LIST_STR = '' if CONFIG is None else CONFIG.get('FileInjection', 'file_list', fallback='')
 SAVE_FILE_DIR = DEFAULT_SAVE_FILE_PATH if CONFIG is None else CONFIG.get('FileGeneration', 'save_file_path', fallback=DEFAULT_SAVE_FILE_PATH)
 URL_PREFIX = 'http://localhost' if CONFIG is None else CONFIG.get('FileGeneration', 'url_prefix', fallback='http://localhost')
 WEBAPP_URL_PREFIX = 'http://localhost' if CONFIG is None else CONFIG.get('WebApps', 'url_prefix', fallback='http://localhost')
@@ -87,6 +91,20 @@ if MODULE_LIST_STR.strip() != '':
                         INJECTED_GLOBALS[name] = attr
         except:
             logging.exception(f'Error trying to import {m}')
+
+
+# --------------------------------------------------
+#    Load functions from injection
+# --------------------------------------------------
+# Inject code from each file into INJECTED_GLOBALS
+for filename in map(str.strip, FILE_LIST_STR.split(',')):
+    logging.info(f'Injectiong functions from {filename}')
+    try:
+        with open(filename, "r") as f:
+            code = f.read()
+        exec(code, INJECTED_GLOBALS)
+    except:
+        logging.exception(f'Exception while injecting functions from {filename}')
 
 
 # --------------------------------------------------

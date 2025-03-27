@@ -8,4 +8,5 @@ bokeh
 plotly
 psutil
 Pygments
+mysql-connector-python
 pylinkjs @ git+https://github.com/Snackman8/pyLinkJS.git
