@@ -8,6 +8,19 @@ PIPX_HOME_DIR="/usr/local/pipx"
 PIPX_BIN_DIR="/usr/local/bin"
 SYSTEMD_PATH="/etc/systemd/system/$SERVICE_NAME"
 
+# --- Find pipx binary (/usr/bin, /usr/local/bin, or PATH) ---
+PIPX_CMD="$(command -v pipx || true)"
+if [[ -z "$PIPX_CMD" ]]; then
+  for c in /usr/local/bin/pipx /usr/bin/pipx; do
+    [[ -x "$c" ]] && PIPX_CMD="$c" && break
+  done
+fi
+if [[ -z "$PIPX_CMD" ]]; then
+  echo "ERROR: pipx not found. Install with 'apt/dnf install pipx' or 'python3 -m pip install --user pipx'." >&2
+  exit 1
+fi
+sudo mkdir -p "$PIPX_HOME_DIR" "$PIPX_BIN_DIR"
+
 # --- Minimal OS detection for Apache layout ---
 if [[ -d /etc/httpd ]]; then
   # RHEL/CentOS/Fedora
@@ -42,7 +55,7 @@ if [[ "$1" == "--uninstall" ]]; then
   sudo systemctl daemon-reload
 
   echo "Uninstalling the app using pipx..."
-  sudo PIPX_HOME=$PIPX_HOME_DIR PIPX_BIN_DIR=$PIPX_BIN_DIR /usr/local/bin/pipx uninstall chatgpt_awesome_actions
+  sudo PIPX_HOME=$PIPX_HOME_DIR PIPX_BIN_DIR=$PIPX_BIN_DIR "$PIPX_CMD" uninstall chatgpt_awesome_actions
 
   echo "Removing Apache proxy configuration..."
   if [[ -n "$APACHE_DISABLE_CMD" ]]; then
@@ -63,7 +76,7 @@ echo "Installing chatgpt_awesome_actions..."
 
 # Install the app (force to refresh if already installed)
 echo "Installing the application using pipx..."
-sudo PIPX_HOME=$PIPX_HOME_DIR PIPX_BIN_DIR=$PIPX_BIN_DIR /usr/local/bin/pipx install .. --include-deps --force
+sudo PIPX_HOME=$PIPX_HOME_DIR PIPX_BIN_DIR=$PIPX_BIN_DIR "$PIPX_CMD" install .. --include-deps --force
 
 echo "Creating directories for generated files..."
 sudo mkdir -p /var/lib/chatgpt_awesome_actions/generated_files
