@@ -125,8 +125,148 @@ sudo certbot renew --dry-run
   ```bash
   systemctl list-timers | grep certbot
   ```
+---
 
+## ✅ Post-Install Validation (Bootstrap, No Auth)
 
+After the initial install (`./install.sh`) **before** enabling auth, verify the service is reachable.
+
+> Expected: HTTP **200** (OK)
+
+### 1) Ensure `$DOMAIN` is set
+```bash
+export DOMAIN=example.com
+```
+
+### 2) Test the public endpoint
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -L "https://$DOMAIN/chatgpt_awesome_actions/actions"
+```
+
+**Expected output:**
+```
+200
+```
+
+### Why 200?
+- In **bootstrap (no-auth) mode**, the `/chatgpt_awesome_actions/actions` endpoint is intentionally open to confirm the app and Apache proxy are wired correctly.
+- A **200 OK** indicates:
+  - The systemd service is running and serving the endpoint.
+  - Apache virtual host / proxy rules are active.
+  - (If using HTTPS) Any HTTP→HTTPS redirects have been followed (`curl -L`).
+- This check is a basic **liveness/readiness** probe; it does **not** perform an authenticated action call.
+
+---
+
+## 🔑 Creating a New API Key
+
+Before ChatGPT can call your actions, you must generate an **API key**.  
+This key will be used by ChatGPT to authenticate every action call against your deployment.  
+Without a valid API key, action requests will be rejected.
+
+API keys are managed with the `datahub_api_key_manager` tool. This tool stores keys in a local SQLite database.
+
+---
+
+### Steps
+
+1. Run the key manager (using the deployment database path):
+   ```bash
+   datahub_api_key_manager --db_path ~/chatgpt_awesome_actions/deployment/keys.db
+   ```
+
+2. From the **Key Management Console**, choose option **1. Add Key**:
+   ```
+   Key Management Console
+   1. Add Key
+   2. View Keys
+   3. Update Key
+   4. Delete Key
+   5. Exit
+   Enter your choice: 1
+   ```
+
+3. Follow the prompts:
+   - **Allowed path regex** → press Enter to allow all (`.*`)
+   - **Start date / End date** → leave blank for no restriction
+   - **API key** → press Enter to auto-generate
+   - **Note** → optional description for the key
+
+4. Example output:
+   ```
+   Key added successfully.
+   API Key: 1Az4obON6dLUpcuQuGUsjvsZeRq3iTNP
+   ```
+
+   ⚠️ Save this API key securely — you will need to provide it to ChatGPT so it can authenticate action calls.
+
+5. To confirm the key was added, select **2. View Keys**:
+   ```
+   ID    | Allowed Path Regex | Start Date | End Date | API Key                            | Note
+   ------------------------------------------------------------------------------------------------------
+   1     | .*                 |            |          | 1Az4obON6dLUpcuQuGUsjvsZeRq3iTNP   |
+   ```
+
+6. When finished, choose **5. Exit**.
+
+---
+
+### Notes
+- The generated API key must be provided to ChatGPT when configuring actions.  
+- By default, keys do not expire unless a start and/or end date is specified.  
+- The SQLite database is located at:
+  ```
+  ~/chatgpt_awesome_actions/deployment/keys.db
+  ```
+  Ensure this file is backed up securely.
+
+---
+
+## 🚀 Deploying with the API Key
+
+Once the API key has been generated, you must redeploy the system with authentication enabled.
+
+1. **Uninstall the bootstrap deployment**:
+   ```bash
+   cd ~/chatgpt_awesome_actions/deployment
+   sudo ./install.sh --uninstall
+   ```
+
+2. **Reinstall with authentication enabled**:
+   ```bash
+   cd ~/chatgpt_awesome_actions/deployment
+   sudo ./install_with_auth.sh
+   ```
+
+After this step, your deployment will require the API key for all ChatGPT action calls.
+
+---
+
+## ✅ Post-Install Validation (Auth Mode)
+
+After installing with authentication (`./install_with_auth.sh`), verify that unauthenticated requests are **rejected**.
+
+> Expected: HTTP **400** (Bad Request) when no API key is provided.
+
+### 1) Ensure `$DOMAIN` is set (if not already)
+```bash
+export DOMAIN=example.com
+```
+
+### 2) Test the public endpoint (no auth)
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -L "https://$DOMAIN/chatgpt_awesome_actions/actions"
+```
+
+**Expected output:**
+```
+400
+```
+
+### Why 400?
+The actions endpoint requires authenticated requests and/or required parameters. Hitting it without credentials should return **400** to indicate an invalid/missing request context.
+
+---
 
 ## 🛠️ Uninstall
 To uninstall, run the installer with the `--uninstall` flag:
