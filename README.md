@@ -268,6 +268,119 @@ The actions endpoint requires authenticated requests and/or required parameters.
 
 ---
 
+# Create a GPT Action with Custom API Key Auth (`x-api-key`)
+
+## Steps (before schema)
+1. Create a new GPT → Explore GPTs → Create → name/description.
+2. Add an Action → Actions → Add Action → Import from schema → paste the schema below.
+
+---
+
+## OpenAPI schema (paste as-is; update the last URL after)
+```
+openapi: 3.1.0
+info:
+  title: Dynamic API
+  version: 1.0.0
+  description: API with dynamic function handlers
+servers:
+  - url: https://<YOUR_DOMAIN>/chatgpt_awesome_actions/
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+security:
+  - ApiKeyAuth: []
+paths:
+  /actions/echo:
+    post:
+      description: Echoes back a message as a test.
+      operationId: actions__echo
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                msg:
+                  type: string
+                  description: The message to be returned.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                description: 'A dictionary containing the response with:'
+                properties:
+                  body:
+                    type: string
+                    description: The echoed message.
+                  content-type:
+                    type: string
+                    description: The MIME type of the response.
+  /actions/exec_python_code:
+    post:
+      description: >
+        Executes Python code on a remote machine. Any strings in the return
+        value that start with `/tmp/` will automatically be converted to
+        published URLs, and the corresponding temporary files will be deleted
+        after publication.
+      operationId: actions__exec_python_code
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  description: >
+                    The Python code to execute. The code must assign a value to
+                    `__retval__`.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                description: 'A dictionary containing the execution result with:'
+                properties:
+                  body:
+                    type: string
+                    description: >
+                      The return value of the executed Python code. Any file paths
+                      from `/tmp/`.
+                  content-type:
+                    type: string
+                    description: The MIME type of the response, dynamically set.
+```
+---
+
+## Steps (after schema)
+3. Change the server URL:
+   - In `servers`, replace `<YOUR_DOMAIN>` with your domain.
+   - Keep `/chatgpt_awesome_actions/` if that’s where your service is mounted.
+4. Configure Authentication (matches the UI):
+   - Authentication Type: API Key
+   - Auth Type: Custom
+   - Custom Header Name: x-api-key
+   - API Key: paste your generated key
+   - Save
+
+---
+
+## Test (inside the Action tester)
+- Call POST `/actions/echo` with:
+{ "msg": "hello" }
+- Expect 200 OK with the echoed message in `body`.
+
+---
+
 ## 🛠️ Uninstall
 To uninstall, run the installer with the `--uninstall` flag:
 
