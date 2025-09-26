@@ -76,45 +76,57 @@ After installation:
 
 To secure your deployment with a free Let's Encrypt SSL certificate, install **Certbot** and configure Apache.
 
+---
+
 ### Ubuntu
 
 ```bash
+# Set your domain name
+export DOMAIN=example.com
+
 # Install Certbot and Apache plugin
 sudo apt-get update
 sudo apt-get install -y certbot python3-certbot-apache
 
-# Obtain and install a certificate (replace example.com with your domain)
-sudo certbot --apache -d example.com -d www.example.com
+# Obtain and install a certificate
+sudo certbot --apache -d $DOMAIN
 
 # Test auto-renewal
 sudo certbot renew --dry-run
 ```
 
+---
+
 ### RHEL (8/9)
 
 ```bash
+# Set your domain name
+export DOMAIN=example.com
+
 # Enable EPEL repository
 sudo dnf install -y epel-release
 
 # Install Certbot and Apache plugin
 sudo dnf install -y certbot python3-certbot-apache
 
-# Obtain and install a certificate (replace example.com with your domain)
-sudo certbot --apache -d example.com -d www.example.com
+# Obtain and install a certificate
+sudo certbot --apache -d $DOMAIN
 
 # Test auto-renewal
 sudo certbot renew --dry-run
 ```
 
+---
+
 ### Notes
-- Certificates are stored in `/etc/letsencrypt/live/`.
+- Certificates are stored in `/etc/letsencrypt/live/$DOMAIN/`.
 - Auto-renewal is handled by a systemd timer (`certbot.timer`) by default.
 - To check the renewal service:
   ```bash
   systemctl list-timers | grep certbot
   ```
 
----
+
 
 ## 🛠️ Uninstall
 To uninstall, run the installer with the `--uninstall` flag:
