@@ -72,11 +72,47 @@ After installation:
 
 ---
 
-## 📖 Notes
-- For custom configurations, review `deployment/install.sh` before running.  
-- Logs are typically located in:
-  - `/var/log/apache2/` (Ubuntu)
-  - `/var/log/httpd/` (RHEL)
+## 🔒 Enable HTTPS with Let's Encrypt (Apache)
+
+To secure your deployment with a free Let's Encrypt SSL certificate, install **Certbot** and configure Apache.
+
+### Ubuntu
+
+```bash
+# Install Certbot and Apache plugin
+sudo apt-get update
+sudo apt-get install -y certbot python3-certbot-apache
+
+# Obtain and install a certificate (replace example.com with your domain)
+sudo certbot --apache -d example.com -d www.example.com
+
+# Test auto-renewal
+sudo certbot renew --dry-run
+```
+
+### RHEL (8/9)
+
+```bash
+# Enable EPEL repository
+sudo dnf install -y epel-release
+
+# Install Certbot and Apache plugin
+sudo dnf install -y certbot python3-certbot-apache
+
+# Obtain and install a certificate (replace example.com with your domain)
+sudo certbot --apache -d example.com -d www.example.com
+
+# Test auto-renewal
+sudo certbot renew --dry-run
+```
+
+### Notes
+- Certificates are stored in `/etc/letsencrypt/live/`.
+- Auto-renewal is handled by a systemd timer (`certbot.timer`) by default.
+- To check the renewal service:
+  ```bash
+  systemctl list-timers | grep certbot
+  ```
 
 ---
 
