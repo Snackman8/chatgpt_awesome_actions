@@ -324,6 +324,9 @@ file_list = /srv/extra_funcs.py
 
 [Logging]
 log_level = INFO
+
+[Monitoring]
+monitor_url = http://localhost:8300
 EOF
 ```
 
