@@ -434,13 +434,34 @@ servers:
    - In `servers`, replace `<YOUR_DOMAIN>` with your domain.
    - Keep `/chatgpt_awesome_actions/` if that’s where your service is mounted.
 
+6. Save the GPT
 
 ---
 
-## Test (inside the Action tester)
-- Call POST `/actions/echo` with:
-{ "msg": "hello" }
-- Expect 200 OK with the echoed message in `body`.
+
+## Test the `exec_python_code` Action (with Monitor at `$DOMAIN:8300`)
+
+1) Open the monitor app: `https://$DOMAIN:8300`
+
+2) In ChatGPT (your GPT), run a quick smoke test.  
+**Prompt:**
+```text
+Use exec_python_code to run some Python code
+```
+
+3) Ask for details about the function.  
+**Prompt:**
+```text
+Use exec_python_code to show the docstring and source for fake_restaurant_revenue_df.
+```
+
+4) Execute the function.  
+**Prompt:**
+```text
+Use exec_python_code to execute fake_restaurant_revenue_df for 2025-09-26 and return a readable table.
+```
+
+5) After each step, verify the code and response in both ChatGPT and the monitor.
 
 ---
 
