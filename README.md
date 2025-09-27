@@ -280,14 +280,35 @@ sudo chmod 755 /srv/generated_files
 sudo tee /srv/extra_funcs.py >/dev/null <<'PY'
 import pandas as pd
 
-def fake_restaurant_revenue_df():
-    return pd.DataFrame([
-        {"date":"2025-09-26","location":"Main Dining","orders":420,"avg_ticket_usd":27.50,"revenue_usd":11550.00},
-        {"date":"2025-09-26","location":"Noodle Bar","orders":310,"avg_ticket_usd":18.75,"revenue_usd":5812.50},
-        {"date":"2025-09-26","location":"Sushi Corner","orders":160,"avg_ticket_usd":34.20,"revenue_usd":5472.00},
-        {"date":"2025-09-26","location":"Cafe & Bakery","orders":520,"avg_ticket_usd":9.80,"revenue_usd":5096.00},
-        {"date":"2025-09-26","location":"Sports Bar","orders":280,"avg_ticket_usd":23.40,"revenue_usd":6552.00}
-    ])
+def fake_restaurant_revenue_df(date_str: str = "2025-09-26"):
+    """
+    Return a hardcoded pandas DataFrame of fake restaurant revenue for a given date.
+
+    Args:
+        date_str (str, optional): ISO date string ("YYYY-MM-DD") to populate the 'date' column
+            for all rows. Defaults to "2025-09-26".
+
+    Returns:
+        pandas.DataFrame: A static table with columns:
+            - date (str): equals date_str for every row
+            - location (str): restaurant/location name
+            - orders (int): count of orders
+            - avg_ticket_usd (float): average ticket value in USD
+            - revenue_usd (float): total revenue in USD (precomputed, demo-only)
+
+    Notes:
+        This dataset is fixed and intended for demos/tests only. It does not query any real systems.
+    """
+    rows = [
+        {"location":"Main Dining","orders":420,"avg_ticket_usd":27.50,"revenue_usd":11550.00},
+        {"location":"Noodle Bar","orders":310,"avg_ticket_usd":18.75,"revenue_usd":5812.50},
+        {"location":"Sushi Corner","orders":160,"avg_ticket_usd":34.20,"revenue_usd":5472.00},
+        {"location":"Cafe & Bakery","orders":520,"avg_ticket_usd":9.80,"revenue_usd":5096.00},
+        {"location":"Sports Bar","orders":280,"avg_ticket_usd":23.40,"revenue_usd":6552.00},
+    ]
+    df = pd.DataFrame(rows)
+    df.insert(0, "date", date_str)
+    return df
 PY
 ```
 
@@ -305,6 +326,16 @@ file_list = /srv/extra_funcs.py
 log_level = INFO
 EOF
 ```
+
+### 4) Restart the service
+```bash
+# Reload units (only needed if the unit file changed)
+sudo systemctl daemon-reload
+
+# Restart the app service
+sudo systemctl restart chatgpt_awesome_actions_with_auth.service
+```
+
 ---
 # Create a GPT Action with Custom API Key Auth (`x-api-key`)
 
