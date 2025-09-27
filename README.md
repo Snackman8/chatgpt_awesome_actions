@@ -267,7 +267,45 @@ curl -s -o /dev/null -w "%{http_code}\n" -L "https://$DOMAIN/chatgpt_awesome_act
 The actions endpoint requires authenticated requests and/or required parameters. Hitting it without credentials should return **400** to indicate an invalid/missing request context.
 
 ---
+## Demo Setup — Minimal Config & Files for ChatGPT Awesome Actions
 
+### 1) Create publish directory
+```bash
+sudo mkdir -p /srv/generated_files
+sudo chmod 755 /srv/generated_files
+```
+
+### 2) FileInjection module (hardcoded fake revenue DataFrame)
+```bash
+sudo tee /srv/extra_funcs.py >/dev/null <<'PY'
+import pandas as pd
+
+def fake_restaurant_revenue_df():
+    return pd.DataFrame([
+        {"date":"2025-09-26","location":"Main Dining","orders":420,"avg_ticket_usd":27.50,"revenue_usd":11550.00},
+        {"date":"2025-09-26","location":"Noodle Bar","orders":310,"avg_ticket_usd":18.75,"revenue_usd":5812.50},
+        {"date":"2025-09-26","location":"Sushi Corner","orders":160,"avg_ticket_usd":34.20,"revenue_usd":5472.00},
+        {"date":"2025-09-26","location":"Cafe & Bakery","orders":520,"avg_ticket_usd":9.80,"revenue_usd":5096.00},
+        {"date":"2025-09-26","location":"Sports Bar","orders":280,"avg_ticket_usd":23.40,"revenue_usd":6552.00}
+    ])
+PY
+```
+
+### 3) Config file (/etc/chatgpt_awesome_actions_datamodule.conf)
+```bash
+sudo tee /etc/chatgpt_awesome_actions_datamodule.conf >/dev/null <<EOF
+[FileGeneration]
+save_file_path = /srv/generated_files
+url_prefix     = https://$DOMAIN/files
+
+[FileInjection]
+file_list = /srv/extra_funcs.py
+
+[Logging]
+log_level = INFO
+EOF
+```
+---
 # Create a GPT Action with Custom API Key Auth (`x-api-key`)
 
 ## Steps (before schema)
